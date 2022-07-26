@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.Iterator;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.apache.hadoop.fs.Path;
@@ -502,6 +503,7 @@ public final class OmUtils {
       repeatedOmKeyInfo.addOmKeyInfo(keyInfo);
     }
 
+    LOG.error("prepareKeyForDelete created repeatedOmKeyInfo");
     return repeatedOmKeyInfo;
   }
 
@@ -540,15 +542,25 @@ public final class OmUtils {
   /**
    * Return OmKeyInfo that would be recovered.
    */
-  public static OmKeyInfo prepareKeyForRecover(OmKeyInfo keyInfo,
+  public static RepeatedOmKeyInfo prepareKeyForRecover(OmKeyInfo keyInfo,
       RepeatedOmKeyInfo repeatedOmKeyInfo) {
 
     /* TODO: HDDS-2425. HDDS-2426.*/
-    if (repeatedOmKeyInfo.getOmKeyInfoList().contains(keyInfo)) {
-      return keyInfo;
-    } else {
+    if (repeatedOmKeyInfo == null)
       return null;
+    LOG.error("check key {}", keyInfo.getObjectInfo());
+
+    for (Iterator<OmKeyInfo> it = repeatedOmKeyInfo.getOmKeyInfoList().iterator(); it.hasNext();) {
+      OmKeyInfo deletedKeyInfo = it.next();
+      LOG.error("compare key {}", deletedKeyInfo.getObjectInfo());
+      if (deletedKeyInfo.getObjectID() == keyInfo.getObjectID()) {
+        LOG.error("Found OmKeyInfo {}", keyInfo.getKeyName());
+        repeatedOmKeyInfo.getOmKeyInfoList().remove(deletedKeyInfo);
+        LOG.error("Found OmKeyInfo {}, return {}", keyInfo.getKeyName(), repeatedOmKeyInfo.getObjectInfo());
+        return repeatedOmKeyInfo;
+      }
     }
+    return null;
   }
 
   public static int getOMEpoch(boolean isRatisEnabled) {

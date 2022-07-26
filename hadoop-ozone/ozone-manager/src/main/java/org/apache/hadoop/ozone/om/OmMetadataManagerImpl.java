@@ -974,6 +974,64 @@ public class OmMetadataManagerImpl implements OMMetadataManager {
       String startKeyName, String keyPrefix, int maxKeys) throws IOException {
 
     List<RepeatedOmKeyInfo> deletedKeys = new ArrayList<>();
+    if (maxKeys <= 0) {
+      return deletedKeys;
+    }
+
+    if (Strings.isNullOrEmpty(volumeName)) {
+      throw new OMException("Volume name is required.",
+          ResultCodes.VOLUME_NOT_FOUND);
+    }
+
+    if (Strings.isNullOrEmpty(bucketName)) {
+      throw new OMException("Bucket name is required.",
+          ResultCodes.BUCKET_NOT_FOUND);
+    }
+
+    String seekKey;
+    boolean skipStartKey = false;
+    if (StringUtil.isNotBlank(startKeyName)) {
+      // Seek to the specified key.
+      seekKey = getOzoneKey(volumeName, bucketName, startKeyName);
+      skipStartKey = true;
+    } else {
+      // This allows us to seek directly to the first key with the right prefix.
+      seekKey = getOzoneKey(volumeName, bucketName,
+          StringUtil.isNotBlank(keyPrefix) ? keyPrefix : OM_KEY_PREFIX);
+    }
+
+    String seekPrefix;
+    if (StringUtil.isNotBlank(keyPrefix)) {
+      seekPrefix = getOzoneKey(volumeName, bucketName, keyPrefix);
+    } else {
+      seekPrefix = getBucketKey(volumeName, bucketName + OM_KEY_PREFIX);
+    }
+    LOG.error("listTrash seekKey={}, seekPrefix={}", seekKey, seekPrefix);
+
+    int currentCount = 0;
+    try (TableIterator<String, ? extends KeyValue<String, RepeatedOmKeyInfo>>
+             keyIter = getDeletedTable().iterator()) {
+      KeyValue< String, RepeatedOmKeyInfo > kv;
+      keyIter.seek(seekKey);
+      // we need to iterate maxKeys + 1 here because if skipStartKey is true,
+      // we should skip that entry and return the result.
+      while (currentCount < maxKeys + 1 && keyIter.hasNext()) {
+        kv = keyIter.next();
+        LOG.error("listTrash currentCount={}, kv.key={}", currentCount, kv.getKey());
+        if (kv.getKey().equals(seekKey) && skipStartKey) {
+          continue;
+        }
+        if (kv != null && kv.getKey().startsWith(seekPrefix)) {
+          deletedKeys.add(kv.getValue());
+          currentCount++;
+        } else {
+          // The SeekPrefix does not match any more, we can break out of the
+          // loop.
+          break;
+        }
+      }
+    }
+    LOG.error("listTrash return {}", deletedKeys);
     return deletedKeys;
   }
 

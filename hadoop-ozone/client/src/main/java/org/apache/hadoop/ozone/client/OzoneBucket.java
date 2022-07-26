@@ -38,6 +38,7 @@ import org.apache.hadoop.ozone.om.exceptions.OMException;
 import org.apache.hadoop.ozone.om.helpers.OmMultipartInfo;
 import org.apache.hadoop.ozone.om.helpers.OmMultipartUploadCompleteInfo;
 import org.apache.hadoop.ozone.om.helpers.OmKeyInfo;
+import org.apache.hadoop.ozone.om.helpers.RepeatedOmKeyInfo;
 import org.apache.hadoop.ozone.om.helpers.OzoneFileStatus;
 import org.apache.hadoop.ozone.om.helpers.OzoneFSUtils;
 import org.apache.hadoop.ozone.om.helpers.WithMetadata;
@@ -633,6 +634,35 @@ public class OzoneBucket extends WithMetadata {
   }
 
   /**
+   * Returns Iterator to iterate over all keys in the trash.
+   * The result can be restricted using key prefix, will return all
+   * keys if key prefix is null.
+   *
+   * @param keyPrefix Bucket prefix to match
+   * @return {@code Iterator<RepeatedOmKeyInfo>}
+   */
+  public Iterator<? extends RepeatedOmKeyInfo> listTrashKeys(String keyPrefix)
+      throws IOException {
+    return listTrashKeys(keyPrefix, null);
+  }
+
+  /**
+   * Returns Iterator to iterate over all keys after prevKey in the trash.
+   * If prevKey is null it iterates from the first key in the bucket.
+   * The result can be restricted using key prefix, will return all
+   * keys if key prefix is null.
+   *
+   * @param keyPrefix Bucket prefix to match
+   * @param prevKey Keys will be listed after this key name
+   * @return {@code Iterator<RepeatedOmKeyInfo>}
+   */
+  public Iterator<? extends RepeatedOmKeyInfo> listTrashKeys(String keyPrefix, String prevKey)
+      throws IOException {
+    return new TrashKeyIteratorFactory()
+        .getTrashKeyIterator(keyPrefix, prevKey);
+  }
+
+  /**
    * Checks if the bucket is a Link Bucket.
    * @return True if bucket is a link, False otherwise.
    */
@@ -670,6 +700,16 @@ public class OzoneBucket extends WithMetadata {
    */
   public void deleteKeys(List<String> keyList) throws IOException {
     proxy.deleteKeys(volumeName, name, keyList);
+  }
+
+  /**
+   * Recover key from trash to bu cket.
+   * @param key
+   * @param bucket.
+   * @throws IOException
+   */
+  public boolean recoverTrash(String key, String destinationBucket) throws IOException {
+    return proxy.recoverTrash(volumeName, name, key, destinationBucket);
   }
 
   /**
@@ -979,6 +1019,68 @@ public class OzoneBucket extends WithMetadata {
     }
   }
 
+  /**
+   * An Iterator to iterate over {@link RepeatedOmKeyInfo} trash list.
+   */
+  private class TrashKeyIterator implements Iterator<RepeatedOmKeyInfo> {
+
+    private String keyPrefix = null;
+    private Iterator<RepeatedOmKeyInfo> currentIterator;
+    private RepeatedOmKeyInfo currentValue;
+
+    String getKeyPrefix() {
+      return keyPrefix;
+    }
+
+    void setKeyPrefix(String keyPrefixPath) {
+      keyPrefix = keyPrefixPath;
+    }
+
+    /**
+     * Creates an Iterator to iterate over all keys after prevKey in the bucket.
+     * If prevKey is null it iterates from the first key in the bucket.
+     * The returned keys match key prefix.
+     * @param keyPrefix
+     */
+    TrashKeyIterator(String keyPrefix, String prevKey) throws IOException {
+      setKeyPrefix(keyPrefix);
+      this.currentValue = null;
+      this.currentIterator = getNextListOfKeys(prevKey).iterator();
+    }
+
+    @Override
+    public boolean hasNext() {
+      if (!currentIterator.hasNext() && currentValue != null) {
+        try {
+          currentIterator =
+              getNextListOfKeys(currentValue.getOmKeyInfoList().get(0).getKeyName()).iterator();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return currentIterator.hasNext();
+    }
+
+    @Override
+    public RepeatedOmKeyInfo next() {
+      if (hasNext()) {
+        currentValue = currentIterator.next();
+        return currentValue;
+      }
+      throw new NoSuchElementException();
+    }
+
+    /**
+     * Gets the next set of trash key list using proxy.
+     * @param prevKey
+     * @return {@code List<OzoneKey>}
+     */
+    List<RepeatedOmKeyInfo> getNextListOfKeys(String prevKey) throws
+        IOException {
+      return proxy.listTrash(volumeName, name, prevKey, keyPrefix,
+          listCacheSize);
+    }
+  }
 
   /**
    * An Iterator to iterate over {@link OzoneKey} list.
@@ -1262,6 +1364,13 @@ public class OzoneBucket extends WithMetadata {
       } else {
         return new KeyIterator(keyPrefix, prevKey);
       }
+    }
+  }
+
+  private class TrashKeyIteratorFactory {
+    TrashKeyIterator getTrashKeyIterator(String keyPrefix, String prevKey)
+        throws IOException {
+      return new TrashKeyIterator(keyPrefix, prevKey);
     }
   }
 

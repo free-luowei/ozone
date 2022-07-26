@@ -108,6 +108,10 @@ public final class OmKeyInfo extends WithParentObjectId {
     this.parentObjectID = parentObjectID;
   }
 
+  public long getObjectID() {
+    return objectID;
+  }
+
   public String getVolumeName() {
     return volumeName;
   }

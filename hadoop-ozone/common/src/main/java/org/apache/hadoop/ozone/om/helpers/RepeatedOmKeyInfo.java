@@ -76,6 +76,17 @@ public class RepeatedOmKeyInfo {
     return builder.build();
   }
 
+  public String getObjectInfo() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("[");
+    for (OmKeyInfo k : omKeyInfoList) {
+      sb.append(k.getObjectInfo());
+      sb.append(",");
+    }
+    sb.append("]");
+    return sb.toString();
+  }
+
   /**
    * Builder of RepeatedOmKeyInfo.
    */

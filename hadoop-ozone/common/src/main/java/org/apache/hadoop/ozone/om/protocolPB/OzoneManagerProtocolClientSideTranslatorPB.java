@@ -1586,21 +1586,28 @@ public final class OzoneManagerProtocolClientSideTranslatorPB
       String bucketName, String startKeyName, String keyPrefix, int maxKeys)
       throws IOException {
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(volumeName),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(volumeName),
         "The volume name cannot be null or " +
         "empty.  Please enter a valid volume name or use '*' as a wild card");
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(bucketName),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(bucketName),
         "The bucket name cannot be null or " +
         "empty.  Please enter a valid bucket name or use '*' as a wild card");
 
-    ListTrashRequest trashRequest = ListTrashRequest.newBuilder()
-        .setVolumeName(volumeName)
-        .setBucketName(bucketName)
-        .setStartKeyName(startKeyName)
-        .setKeyPrefix(keyPrefix)
-        .setMaxKeys(maxKeys)
-        .build();
+    ListTrashRequest.Builder reqBuilder = ListTrashRequest.newBuilder();
+    reqBuilder.setVolumeName(volumeName);
+    reqBuilder.setBucketName(bucketName);
+    reqBuilder.setMaxKeys(maxKeys);
+
+    if (startKeyName != null) {
+      reqBuilder.setStartKeyName(startKeyName);
+    }
+
+    if (keyPrefix != null) {
+      reqBuilder.setKeyPrefix(keyPrefix);
+    }
+
+    ListTrashRequest trashRequest = reqBuilder.build();
 
     OMRequest omRequest = createOMRequest(Type.ListTrash)
         .setListTrashRequest(trashRequest)
@@ -1624,19 +1631,19 @@ public final class OzoneManagerProtocolClientSideTranslatorPB
   public boolean recoverTrash(String volumeName, String bucketName,
       String keyName, String destinationBucket) throws IOException {
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(volumeName),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(volumeName),
         "The volume name cannot be null or empty. " +
         "Please enter a valid volume name.");
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(bucketName),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(bucketName),
         "The bucket name cannot be null or empty. " +
         "Please enter a valid bucket name.");
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(keyName),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(keyName),
         "The key name cannot be null or empty. " +
         "Please enter a valid key name.");
 
-    Preconditions.checkArgument(Strings.isNullOrEmpty(destinationBucket),
+    Preconditions.checkArgument(!Strings.isNullOrEmpty(destinationBucket),
         "The destination bucket name cannot be null or empty. " +
         "Please enter a valid destination bucket name.");
 
